@@ -1,3 +1,5 @@
+package com.mruiz.kafka;
+
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -14,7 +16,7 @@ public class KafkaFileProducer extends Thread {
 
     private static final String topicName
             = "test";
-    public static final String fileName = "dataset/Processed_subject101.dat";
+    public static final String fileName = "in/test_1.pdf";
 
     private final KafkaProducer<String, String> producer;
     private final Boolean isAsync;

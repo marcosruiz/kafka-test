@@ -1,28 +1,22 @@
 package com.mruiz.kafka;
 
-import com.mruiz.kafka.constants.IKafkaConstants;
-import com.mruiz.kafka.consumer.ConsumerCreator;
-import com.mruiz.kafka.producer.ProducerCreator;
+import com.mruiz.kafka.consumer.ConsumerThread;
+import com.mruiz.kafka.producer.ProducerThread;
 import junit.framework.Test;
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.CreateTopicsResult;
-import org.apache.kafka.clients.admin.KafkaAdminClient;
-import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.errors.TopicExistsException;
 
-import java.util.Collections;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
+import java.util.ArrayList;
 
 /**
- * Unit test for simple App.
+ * Unit test for checking the performance of Kafka
+ * Before you start these tests you need to:
+ * start Zookeeper (I suppose you are in $KAFKA_HOME)
+ * $ bin/zookeeper-server-start.sh config/zookeeper.properties
+ * start Kafka
+ * $ bin/kafka-server-start.sh config/server.properties
+ * create a queue of 10 partitions which topic is 'demo'
+ * $ bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 10 --topic demo
  */
 public class AppTest extends TestCase {
   /**
@@ -48,54 +42,18 @@ public class AppTest extends TestCase {
     assertTrue(true);
   }
 
-  static void runProducer(int numMessages) {
-    Producer<Long, String> producer = ProducerCreator.createProducer();
-
-    for (int index = 0; index < numMessages; index++) {
-      final ProducerRecord<Long, String> record = new ProducerRecord<Long, String>(IKafkaConstants.TOPIC_NAME,
-          "This is record " + index);
-      try {
-        RecordMetadata metadata = producer.send(record).get();
-      } catch (ExecutionException e) {
-        System.out.println("Error in sending record");
-        System.out.println(e);
-      } catch (InterruptedException e) {
-        System.out.println("Error in sending record");
-        System.out.println(e);
-      }
-    }
-  }
-
-  static void runConsumer(){
-    Consumer<Long, String> consumer = ConsumerCreator.createConsumer();
-    int noMessageToFetch = 0;
-
-    while (true) {
-      final ConsumerRecords<Long, String> consumerRecords = consumer.poll(1000);
-      if (consumerRecords.count() == 0) {
-        noMessageToFetch++;
-        if (noMessageToFetch > 0)
-          break;
-        else
-          continue;
-      }
-
-      consumerRecords.forEach(record -> {
-        System.out.println("Record value " + record.value());
-      });
-      consumer.commitAsync();
-    }
-    consumer.close();
-  }
-
   /**
    * 1000 mensajes de texto
-   *
    */
-  public void test1000Messages1() {
+  public void test1000Messages1() throws InterruptedException {
     final int N_MESSAGES = 1000;
-    runProducer(N_MESSAGES);
-    runConsumer();
+    Thread tProducer = new Thread(new ProducerThread(N_MESSAGES));
+    Thread tConsumer = new Thread(new ConsumerThread(0));
+    tProducer.start();
+    tConsumer.start();
+    tProducer.join();
+    tConsumer.join();
+    assertTrue(true);
   }
 
   /**
@@ -103,49 +61,73 @@ public class AppTest extends TestCase {
    * 1 cola
    * 2 partitions
    */
-  public void test1000Messages2(){
+  public void test1000Messages2() throws InterruptedException {
     final int N_MESSAGES = 1000;
-    AdminClient adminClient = KafkaAdminClient.create(buildDefaultClientConfig());
-    runProducer(N_MESSAGES);
-    runConsumer();
-  }
-  public void test1000Messages3(){}
+    final int N_CONSUMERS = 2;
+    // Producer
+    Thread tProducer = new Thread(new ProducerThread(N_MESSAGES));
+    tProducer.start();
 
-  /**
-   * Creates a topic in Kafka. If the topic already exists this does nothing.
-   * @param topicName - the namespace name to create.
-   * @param partitions - the number of partitions to create.
-   */
-  public void createTopic(final String topicName, final int partitions) {
-    final short replicationFactor = 1;
-
-    // Create admin client
-    try (final AdminClient adminClient = KafkaAdminClient.create(buildDefaultClientConfig())) {
-      try {
-        // Define topic
-        final NewTopic newTopic = new NewTopic(topicName, partitions, replicationFactor);
-
-        // Create topic, which is async call.
-        final CreateTopicsResult createTopicsResult = adminClient.createTopics(Collections.singleton(newTopic));
-
-        // Since the call is Async, Lets wait for it to complete.
-        createTopicsResult.values().get(topicName).get();
-      } catch (InterruptedException | ExecutionException e) {
-        if (!(e.getCause() instanceof TopicExistsException)) {
-          throw new RuntimeException(e.getMessage(), e);
-        }
-        // TopicExistsException - Swallow this exception, just means the topic already exists.
-      }
+    // Consumers
+    ArrayList<Thread> arrayOfTConsumers = new ArrayList();
+    for (int i = 0; i < N_CONSUMERS; i++) {
+      arrayOfTConsumers.add(new Thread(new ConsumerThread(i)));
     }
+    for (int i = 0; i < N_CONSUMERS; i++) {
+      arrayOfTConsumers.get(i).start();
+    }
+
+    // Check everything is done
+    tProducer.join();
+    while (!arrayOfTConsumers.isEmpty()) {
+      arrayOfTConsumers.remove(0).join();
+    }
+    assertTrue(true);
   }
 
   /**
-   * Internal helper method to build a default configuration.
+   * 1000 mensajes de texto
+   * 1 cola
+   * 10 particiones
    */
-  private Map<String, Object> buildDefaultClientConfig() {
-    Map<String, Object> defaultClientConfig = Maps.newHashMap();
-    defaultClientConfig.put("bootstrap.servers", getKafkaConnectString());
-    defaultClientConfig.put("client.id", "test-consumer-id");
-    return defaultClientConfig;
+  public void test1000Messages10() throws InterruptedException {
+    final int N_MESSAGES = 1000;
+    final int N_CONSUMERS = 10;
+    // Producer
+    Thread tProducer = new Thread(new ProducerThread(N_MESSAGES));
+    tProducer.start();
+
+    // Consumers
+    ArrayList<Thread> arrayOfTConsumers = new ArrayList();
+    for (int i = 0; i < N_CONSUMERS; i++) {
+      arrayOfTConsumers.add(new Thread(new ConsumerThread(i)));
+    }
+    for (int i = 0; i < N_CONSUMERS; i++) {
+      arrayOfTConsumers.get(i).start();
+    }
+
+    // Check everything is done
+    tProducer.join();
+    while (!arrayOfTConsumers.isEmpty()) {
+      arrayOfTConsumers.remove(0).join();
+    }
+    assertTrue(true);
   }
+
+  /**
+   * 1000 PDFs
+   * 1 cola
+   * 1 particion
+   */
+  public void test1000PDFs1() throws InterruptedException {
+    final int N_MESSAGES = 1000;
+    Thread tProducer = new Thread(new ProducerThread(N_MESSAGES, "test_2.pdf"));
+    Thread tConsumer = new Thread(new ConsumerThread(0));
+    tProducer.start();
+    tConsumer.start();
+    tProducer.join();
+    tConsumer.join();
+    assertTrue(true);
+  }
+
 }
