@@ -19,7 +19,7 @@ public class App {
 	 */
 	public static void main(String[] args) {
 		// Nota: Esto se ejecuta de manera secuencial
-		runProducer();
+//		runProducer();
 		runConsumer();
 	}
 

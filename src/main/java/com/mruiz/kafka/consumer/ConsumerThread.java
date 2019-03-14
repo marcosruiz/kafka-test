@@ -32,7 +32,7 @@ public class ConsumerThread implements Runnable {
       }
 
       consumerRecords.forEach(record -> {
-        System.out.println("Value of " + id + ": " + record.value());
+//        System.out.println("Value of " + id + ": " + record.value());
       });
       consumer.commitAsync();
     }

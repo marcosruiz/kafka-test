@@ -45,7 +45,7 @@ public class AppTest extends TestCase {
   /**
    * 1000 mensajes de texto
    */
-  public void test1000Messages1() throws InterruptedException {
+  public void test1000Messages1Consumer() throws InterruptedException {
     final int N_MESSAGES = 1000;
     Thread tProducer = new Thread(new ProducerThread(N_MESSAGES));
     Thread tConsumer = new Thread(new ConsumerThread(0));
@@ -61,7 +61,7 @@ public class AppTest extends TestCase {
    * 1 cola
    * 2 partitions
    */
-  public void test1000Messages2() throws InterruptedException {
+  public void test1000Messages2Consumers() throws InterruptedException {
     final int N_MESSAGES = 1000;
     final int N_CONSUMERS = 2;
     // Producer
@@ -90,7 +90,7 @@ public class AppTest extends TestCase {
    * 1 cola
    * 10 particiones
    */
-  public void test1000Messages10() throws InterruptedException {
+  public void test1000Messages10Consumers() throws InterruptedException {
     final int N_MESSAGES = 1000;
     final int N_CONSUMERS = 10;
     // Producer
@@ -115,19 +115,36 @@ public class AppTest extends TestCase {
   }
 
   /**
-   * 1000 PDFs
+   * 100K mensajes de texto
    * 1 cola
-   * 1 particion
+   * 10 particiones
    */
-  public void test1000PDFs1() throws InterruptedException {
-    final int N_MESSAGES = 1000;
-    Thread tProducer = new Thread(new ProducerThread(N_MESSAGES, "test_2.pdf"));
-    Thread tConsumer = new Thread(new ConsumerThread(0));
+  public void test100KMessages10Consumers() throws InterruptedException {
+    final int N_MESSAGES = 100000;
+    final int N_CONSUMERS = 10;
+    // Producer
+    Thread tProducer = new Thread(new ProducerThread(N_MESSAGES));
     tProducer.start();
-    tConsumer.start();
+
+    // Consumers
+    ArrayList<Thread> arrayOfTConsumers = new ArrayList();
+    for (int i = 0; i < N_CONSUMERS; i++) {
+      arrayOfTConsumers.add(new Thread(new ConsumerThread(i)));
+    }
+    for (int i = 0; i < N_CONSUMERS; i++) {
+      arrayOfTConsumers.get(i).start();
+    }
+
+    // Check everything is done
     tProducer.join();
-    tConsumer.join();
+    while (!arrayOfTConsumers.isEmpty()) {
+      arrayOfTConsumers.remove(0).join();
+    }
     assertTrue(true);
   }
+
+  /**
+   *
+   */
 
 }
